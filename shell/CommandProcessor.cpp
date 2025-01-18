@@ -737,7 +737,7 @@ string CommandProcessor::trimString(const string& input)
 void CommandProcessor::showGeneralHelp()
 {
     cout << "Available Commands:\n";
-    cout << "-----------------------------------------\n";
+    cout << "-----------------------------------------------------------------------------------\n";
 
     // Determine the maximum length of command names for alignment
     size_t maxCommandLength = 0;
@@ -756,7 +756,7 @@ void CommandProcessor::showGeneralHelp()
         count++;
     }
 
-    cout << "-----------------------------------------\n";
+    cout << "-----------------------------------------------------------------------------------\n";
 }
 
 // Displays detailed help information for a specific command
@@ -1182,135 +1182,158 @@ void CommandProcessor::handleQuit(bool& isRunning)
 // Navigates to a file based on the provided path and returns a File_Entry pointer
 File_Entry* CommandProcessor::MoveToFile(string& path)
 {
-    // Step 1: Split the path into directory path and file name
+    // **Step 1: Split the Path into Directory Path and File Name**
+    // Find the last backslash in the path to separate the directory path from the file name
     size_t lastBackslash = path.find_last_of('\\');
     if (lastBackslash == string::npos)
     {
-        // Error if the path does not contain a backslash
+        // **Error: Invalid File Path Format**
+        // If no backslash is found, the path is invalid (e.g., it doesn't specify a directory)
         cout << "Error: Invalid file path format.\n";
-        return nullptr;
+        return nullptr; // Return nullptr to indicate failure
     }
 
-    // Extract the directory path and file name
+    // Extract the directory path (everything before the last backslash)
     string dirPath = path.substr(0, lastBackslash);
+    // Extract the file name (everything after the last backslash)
     string fileName = path.substr(lastBackslash + 1);
 
-    // Step 2: Check if the file name is valid
+    // **Step 2: Validate the File Name**
+    // Check if the file name is empty (invalid)
     if (fileName.empty())
     {
         cout << "Error: File name is empty.\n";
-        return nullptr;
+        return nullptr; // Return nullptr to indicate failure
     }
 
-    // Step 3: Navigate to the target directory
+    // **Step 3: Navigate to the Target Directory**
+    // Use the MoveToDir function to navigate to the directory specified in the path
     Directory* targetDir = MoveToDir(dirPath);
     if (targetDir == nullptr)
     {
-        // If MoveToDir fails, an error message is already printed
-        return nullptr;
+        // If MoveToDir fails, it will already print an error message
+        return nullptr; // Return nullptr to indicate failure
     }
 
-    // Step 4: Search for the file in the target directory
+    // **Step 4: Search for the File in the Target Directory**
+    // Search for the file in the target directory using the file name
     int fileIndex = targetDir->searchDirectory(fileName);
     if (fileIndex == -1)
     {
-        // File not found in the specified directory
+        // **Error: File Not Found**
+        // If the file is not found, print an error message
         cout << "Error: File '" << fileName << "' not found in '" << targetDir->getFullPath() << "'.\n";
-        return nullptr;
+        return nullptr; // Return nullptr to indicate failure
     }
 
-    // Retrieve the Directory_Entry for the file
+    // **Retrieve the Directory_Entry for the File**
+    // Get the Directory_Entry object corresponding to the file
     Directory_Entry& fileEntry = targetDir->DirOrFiles[fileIndex];
 
-    // Step 5: Validate that the entry is a file (not a directory)
-    if (fileEntry.dir_attr == 0x10) // 0x10 indicates a directory
+    // **Step 5: Validate That the Entry is a File**
+    // Check if the entry is a directory (0x10 indicates a directory)
+    if (fileEntry.dir_attr == 0x10)
     {
+        // **Error: Entry is a Directory**
+        // If the entry is a directory, print an error message
         cout << "Error: '" << fileName << "' is a directory.\n";
-        return nullptr;
+        return nullptr; // Return nullptr to indicate failure
     }
 
-    // Step 6: Create and return a File_Entry object for the file
+    // **Step 6: Create and Return a File_Entry Object**
+    // Create a new File_Entry object for the file
     File_Entry* file = new File_Entry(fileEntry, targetDir);
 
-    // Load the file's content if necessary
+    // **Load the File's Content**
+    // Read the file's content into memory (if necessary)
     file->readFileContent();
 
+    // Return the File_Entry object
     return file;
 }
-
 
 
 // Navigates to a directory based on the provided path and returns a Directory pointer
 Directory* CommandProcessor::MoveToDir(const string& path)
 {
-    // Step 1: Make a local modifiable copy of the input path
+    // **Step 1: Normalize the Input Path**
+    // Create a local modifiable copy of the input path to work with
     string normalizedPath = path;
 
-    // Step 2: Split the path by '\\' to extract directory components
-    vector<string> dirs;
+    // **Step 2: Split the Path into Components**
+    // Use a stringstream to split the path by the backslash ('\\') delimiter
+    vector<string> dirs; // Stores the individual directory components
     stringstream ss(normalizedPath);
     string token;
     while (getline(ss, token, '\\'))
     {
         if (!token.empty()) {
-            dirs.push_back(token);
+            dirs.push_back(token); // Add non-empty tokens (directory names) to the vector
         }
     }
 
-    // Step 3: Check if the path is empty after splitting
+    // **Step 3: Validate the Path**
+    // Check if the path is empty after splitting
     if (dirs.empty())
     {
         cout << "Error: Path is empty.\n";
-        return nullptr;
+        return nullptr; // Return nullptr if the path is invalid
     }
 
-    // Step 4: Start at the current directory
+    // **Step 4: Start at the Current Directory**
+    // Begin traversal from the current directory
     Directory* current = *currentDirectoryPtr;
 
-    // Step 5: Handle root navigation (e.g., "C:")
-    string rootDrive = toUpper(current->getDrive()) + ":";
+    // **Step 5: Handle Root Navigation**
+    // Check if the path starts with the root drive (e.g., "C:")
+    string rootDrive = toUpper(current->getDrive()) + ":"; // Get the current drive (e.g., "C:")
     if (toUpper(dirs[0]) == rootDrive)
     {
-        // Navigate to the root directory
+        // Navigate to the root directory by moving up the directory tree
         while (current->parent != nullptr)
         {
-            current = current->parent;
+            current = current->parent; // Move to the parent directory
         }
-        dirs.erase(dirs.begin()); // Remove the root drive from the path
+        dirs.erase(dirs.begin()); // Remove the root drive from the path components
     }
 
-    // Step 6: Traverse the path components
+    // **Step 6: Traverse the Path Components**
+    // Iterate through each directory component in the path
     for (const auto& dirName : dirs)
     {
-        // Search for the directory in the current directory
-        int dirIndex = current->searchDirectory(dirName);
+        // **Search for the Directory in the Current Directory**
+        int dirIndex = current->searchDirectory(dirName); // Search for the directory by name
         if (dirIndex == -1)
         {
+            // **Error: Directory Not Found**
             cout << "Error: Directory '" << dirName << "' not found in '" << current->getFullPath() << "'.\n";
-            return nullptr;
+            return nullptr; // Return nullptr if the directory is not found
         }
 
-        // Retrieve the directory entry and validate it
-        Directory_Entry& entry = current->DirOrFiles[dirIndex];
-        if (entry.dir_attr != 0x10) // Check if the entry is a directory
+        // **Retrieve the Directory Entry**
+        Directory_Entry& entry = current->DirOrFiles[dirIndex]; // Get the directory entry
+
+        // **Validate the Entry Type**
+        if (entry.dir_attr != 0x10) // Check if the entry is a directory (0x10 indicates a directory)
         {
             cout << "Error: '" << dirName << "' is not a directory.\n";
-            return nullptr;
+            return nullptr; // Return nullptr if the entry is not a directory
         }
 
-        // Move to the subdirectory
-        current = entry.subDirectory;
+        // **Move to the Subdirectory**
+        current = entry.subDirectory; // Update the current directory to the subdirectory
         if (!current)
         {
+            // **Error: Subdirectory Not Accessible**
             cout << "Error: Subdirectory '" << dirName << "' is not accessible.\n";
-            return nullptr;
+            return nullptr; // Return nullptr if the subdirectory is inaccessible
         }
     }
 
-    // Step 7: Return the final directory
+    // **Step 7: Return the Final Directory**
+    // After traversing all path components, return the final directory
     return current;
 }
-
 
 
 
@@ -1914,7 +1937,7 @@ void CommandProcessor::handleRename(const vector<string>& args)
  //Handles the 'copy' command to copy files or directories within the virtual file system.
 void CommandProcessor::handleCopy(const vector<string>& args)
 {
-    // **Case (1): Type copy alone**
+    // **Case (1): Handle empty arguments (just "copy" command)**
     if (args.empty())
     {
         cout << "Error: Invalid syntax for copy command.\n";
@@ -1922,59 +1945,62 @@ void CommandProcessor::handleCopy(const vector<string>& args)
         return;
     }
 
+    // Extract source and destination paths from arguments
     string sourcePath = args[0];
     string destinationPath = args.size() > 1 ? args[1] : "";
 
     // **Parse the Source Path**
-    Directory* sourceDir = nullptr;
-    string sourceName;
-    size_t lastSlash = sourcePath.find_last_of("/\\");
+    Directory* sourceDir = nullptr; // Pointer to the source directory
+    string sourceName; // Name of the source file or directory
+    size_t lastSlash = sourcePath.find_last_of("/\\"); // Find the last slash in the source path
 
     if (lastSlash == string::npos)
     {
-        // Source is in the current directory
-        sourceDir = *currentDirectoryPtr;
-        sourceName = sourcePath;
+        // **Case (2): Source is in the current directory**
+        sourceDir = *currentDirectoryPtr; // Set source directory to the current directory
+        sourceName = sourcePath; // Source name is the entire path (no slashes)
     }
     else
     {
-        // Source path includes directories
-        string sourceParentPath = sourcePath.substr(0, lastSlash);
-        sourceName = sourcePath.substr(lastSlash + 1);
-        sourceDir = MoveToDir(sourceParentPath);
+        // **Case (3): Source path includes directories**
+        string sourceParentPath = sourcePath.substr(0, lastSlash); // Extract parent directory path
+        sourceName = sourcePath.substr(lastSlash + 1); // Extract the source file or directory name
+        sourceDir = MoveToDir(sourceParentPath); // Move to the parent directory
     }
 
     // **Check if Source Directory Exists**
     if (!sourceDir)
     {
-        // Case (5): Full path does not exist
+        // **Case (5): Full path does not exist**
         cout << "Error: Source path '" << sourcePath << "' does not exist.\n";
         return;
     }
 
     // **Search for the Source Entry**
-    int sourceIndex = sourceDir->searchDirectory(sourceName);
+    int sourceIndex = sourceDir->searchDirectory(sourceName); // Search for the source entry
     if (sourceIndex == -1)
     {
-        // Case (2): Source file does not exist
+        // **Case (2): Source file or directory does not exist**
         cout << "Error: Source '" << sourceName << "' does not exist.\n";
         return;
     }
 
-    Directory_Entry& sourceEntry = sourceDir->DirOrFiles[sourceIndex];
+    Directory_Entry& sourceEntry = sourceDir->DirOrFiles[sourceIndex]; // Reference to the source entry
 
     // **Handle File Copying**
     if (sourceEntry.dir_attr == 0x00) // 0x00 indicates a file
     {
         // **Determine Destination Directory and File Name**
-        Directory* destinationDir = nullptr;
-        string destFileName;
+        Directory* destinationDir = nullptr; // Pointer to the destination directory
+        string destFileName; // Name of the destination file
 
         if (destinationPath.empty())
         {
-            // Default Destination: Current Directory with Same Name
-            destinationDir = *currentDirectoryPtr;
-            destFileName = sourceName;
+            // **Default Destination: Current Directory with Same Name**
+            destinationDir = *currentDirectoryPtr; // Set destination directory to the current directory
+            destFileName = sourceName; // Destination file name is the same as the source
+
+            // **Check for Self-Copy**
             if (sourceDir == destinationDir && sourceName == destFileName)
             {
                 cout << "The file cannot be copied onto itself.\n";
@@ -1989,39 +2015,39 @@ void CommandProcessor::handleCopy(const vector<string>& args)
             if (destinationPath.size() >= 3 && destinationPath[1] == ':' &&
                 (destinationPath[2] == '\\' || destinationPath[2] == '/'))
             {
-                isAbsolute = true;
+                isAbsolute = true; // Path is absolute (e.g., "C:\...")
             }
 
             if (isAbsolute)
             {
-                // Destination Path is Absolute: Extract File Name
+                // **Destination Path is Absolute: Extract File Name**
                 size_t destLastSlash = destinationPath.find_last_of("/\\");
                 if (destLastSlash == string::npos)
                 {
-                    // Invalid Absolute Path (No File Name)
+                    // **Invalid Absolute Path (No File Name)**
                     cout << "Error: Invalid destination path.\n";
                     cout << "0 file(s) copied.\n";
                     return;
                 }
-                destFileName = destinationPath.substr(destLastSlash + 1);
-                destinationDir = *currentDirectoryPtr; // Copy to Current Directory
+                destFileName = destinationPath.substr(destLastSlash + 1); // Extract file name
+                destinationDir = *currentDirectoryPtr; // Copy to the current directory
             }
             else
             {
-                // Destination Path is Relative
+                // **Destination Path is Relative**
                 size_t destLastSlash = destinationPath.find_last_of("/\\");
                 if (destLastSlash == string::npos)
                 {
-                    // Destination is in Current Directory
-                    destinationDir = *currentDirectoryPtr;
-                    destFileName = destinationPath;
+                    // **Destination is in Current Directory**
+                    destinationDir = *currentDirectoryPtr; // Set destination directory to the current directory
+                    destFileName = destinationPath; // Destination file name is the provided path
                 }
                 else
                 {
-                    // Destination Includes Directory Path
-                    string destParentPath = destinationPath.substr(0, destLastSlash);
-                    destFileName = destinationPath.substr(destLastSlash + 1);
-                    destinationDir = MoveToDir(destParentPath);
+                    // **Destination Includes Directory Path**
+                    string destParentPath = destinationPath.substr(0, destLastSlash); // Extract parent directory
+                    destFileName = destinationPath.substr(destLastSlash + 1); // Extract file name
+                    destinationDir = MoveToDir(destParentPath); // Move to the parent directory
                 }
             }
         }
@@ -2029,25 +2055,25 @@ void CommandProcessor::handleCopy(const vector<string>& args)
         // **Check if Destination Directory Exists**
         if (!destinationDir)
         {
-            // Case (5): Destination Directory Not Found
+            // **Case (5): Destination Directory Not Found**
             cout << "Error: Destination directory does not exist.\n";
             cout << "0 file(s) copied.\n";
             return;
         }
 
         // **Check if Destination is a Directory**
-        int destIndex = destinationDir->searchDirectory(destFileName);
-        bool destIsDirectory = false;
+        int destIndex = destinationDir->searchDirectory(destFileName); // Search for the destination entry
+        bool destIsDirectory = false; // Flag to check if the destination is a directory
 
         if (destIndex != -1)
         {
-            // Destination Exists
-            if (destinationDir->DirOrFiles[destIndex].dir_attr == 0x10)
+            // **Destination Exists**
+            if (destinationDir->DirOrFiles[destIndex].dir_attr == 0x10) // 0x10 indicates a directory
             {
-                // Destination is a Directory
+                // **Destination is a Directory**
                 destIsDirectory = true;
-                destinationDir = destinationDir->DirOrFiles[destIndex].subDirectory;
-                destFileName = sourceName; // Copy with Same Name into Destination Directory
+                destinationDir = destinationDir->DirOrFiles[destIndex].subDirectory; // Move to the subdirectory
+                destFileName = sourceName; // Copy with the same name into the destination directory
             }
         }
 
@@ -2058,7 +2084,7 @@ void CommandProcessor::handleCopy(const vector<string>& args)
             int existingIndex = destinationDir->searchDirectory(sourceName);
             if (existingIndex != -1)
             {
-                // Case (14): Destination File Exists - Prompt for Overwrite
+                // **Case (14): Destination File Exists - Prompt for Overwrite**
                 cout << "Error: File with the name '" << sourceName << "' already exists in the destination directory.\n";
                 cout << "Do you want to overwrite it? (y/n): ";
                 char choice;
@@ -2072,47 +2098,47 @@ void CommandProcessor::handleCopy(const vector<string>& args)
                     return;
                 }
 
-                // Overwrite Existing File
+                // **Overwrite Existing File**
                 Directory_Entry& existingEntry = destinationDir->DirOrFiles[existingIndex];
-                existingEntry = sourceEntry; // Assuming Shallow Copy is Sufficient
+                existingEntry = sourceEntry; // Assuming shallow copy is sufficient
                 cout << "File '" << sourceName << "' overwritten successfully in the destination directory.\n";
                 cout << "1 file(s) copied.\n";
                 return;
             }
 
-            // Destination File Does Not Exist - Proceed to Copy
+            // **Destination File Does Not Exist - Proceed to Copy**
             Directory_Entry newFileEntry = sourceEntry;
-            newFileEntry.assignDir_Name(sourceName); // Assign Same Name
+            newFileEntry.assignDir_Name(sourceName); // Assign the same name
 
             if (!destinationDir->canAddEntry(newFileEntry))
             {
-                // Case (6): Not Enough Space
+                // **Case (6): Not Enough Space**
                 cout << "Error: Not enough space to copy file '" << sourceName << "'.\n";
                 cout << "0 file(s) copied.\n";
                 return;
             }
 
-            destinationDir->addEntry(newFileEntry);
+            destinationDir->addEntry(newFileEntry); // Add the new file to the destination directory
             cout << "File '" << sourceName << "' copied successfully to the destination directory.\n";
             cout << "1 file(s) copied.\n";
             return;
         }
         else
         {
-            // Destination is a File or Intended to be a File
+            // **Destination is a File or Intended to be a File**
             // Check for Self-Copy
             if (sourcePath == destinationPath)
             {
-                // Case (3) & (4): Self-Copy Detected
+                // **Case (3) & (4): Self-Copy Detected**
                 cout << "Error: The file cannot be copied onto itself.\n";
                 cout << "0 file(s) copied.\n";
                 return;
             }
 
-            // Check if Destination File Exists
+            // **Check if Destination File Exists**
             if (destinationDir->searchDirectory(destFileName) != -1)
             {
-                // Case (14): Destination File Exists - Prompt for Overwrite
+                // **Case (14): Destination File Exists - Prompt for Overwrite**
                 cout << "Error: File with the name '" << destFileName << "' already exists in the destination directory.\n";
                 cout << "Do you want to overwrite it? (y/n): ";
                 char choice;
@@ -2126,27 +2152,27 @@ void CommandProcessor::handleCopy(const vector<string>& args)
                     return;
                 }
 
-                // Overwrite Existing File
+                // **Overwrite Existing File**
                 Directory_Entry& existingEntry = destinationDir->DirOrFiles[destIndex];
-                existingEntry = sourceEntry; // Assuming Shallow Copy is Sufficient
+                existingEntry = sourceEntry; // Assuming shallow copy is sufficient
                 cout << "File '" << destFileName << "' overwritten successfully.\n";
                 cout << "1 file(s) copied.\n";
                 return;
             }
 
-            // Destination File Does Not Exist - Proceed to Copy
+            // **Destination File Does Not Exist - Proceed to Copy**
             Directory_Entry newFileEntry = sourceEntry;
-            newFileEntry.assignDir_Name(destFileName); // Assign New File Name
+            newFileEntry.assignDir_Name(destFileName); // Assign the new file name
 
             if (!destinationDir->canAddEntry(newFileEntry))
             {
-                // Case (6): Not Enough Space
+                // **Case (6): Not Enough Space**
                 cout << "Error: Not enough space to copy file '" << sourceName << "'.\n";
                 cout << "0 file(s) copied.\n";
                 return;
             }
 
-            destinationDir->addEntry(newFileEntry);
+            destinationDir->addEntry(newFileEntry); // Add the new file to the destination directory
             cout << "File '" << sourceName << "' copied successfully as '" << destFileName << "'.\n";
             cout << "1 file(s) copied.\n";
             return;
@@ -2160,77 +2186,77 @@ void CommandProcessor::handleCopy(const vector<string>& args)
         // **Case (10): Copy All Files from Source Directory to Existing Destination Directory**
         // **Case (14): Handle Overwrite Scenarios**
 
-        Directory* destinationDir = nullptr;
-        string destDirName;
+        Directory* destinationDir = nullptr; // Pointer to the destination directory
+        string destDirName; // Name of the destination directory
 
         if (destinationPath.empty())
         {
-            // Case (7) (BONUS): No Destination Path Provided - Copy to Current Directory
-            destinationDir = *currentDirectoryPtr;
+            // **Case (7) (BONUS): No Destination Path Provided - Copy to Current Directory**
+            destinationDir = *currentDirectoryPtr; // Set destination directory to the current directory
         }
         else
         {
-            // Destination Path Provided - Determine if Directory Exists
+            // **Destination Path Provided - Determine if Directory Exists**
             size_t destLastSlash = destinationPath.find_last_of("/\\");
             if (destLastSlash == string::npos)
             {
-                // Destination is in Current Directory
-                destinationDir = *currentDirectoryPtr;
-                destDirName = destinationPath;
+                // **Destination is in Current Directory**
+                destinationDir = *currentDirectoryPtr; // Set destination directory to the current directory
+                destDirName = destinationPath; // Destination directory name is the provided path
             }
             else
             {
-                // Destination Includes Directory Path
-                string destParentPath = destinationPath.substr(0, destLastSlash);
-                destDirName = destinationPath.substr(destLastSlash + 1);
-                destinationDir = MoveToDir(destParentPath);
+                // **Destination Includes Directory Path**
+                string destParentPath = destinationPath.substr(0, destLastSlash); // Extract parent directory
+                destDirName = destinationPath.substr(destLastSlash + 1); // Extract directory name
+                destinationDir = MoveToDir(destParentPath); // Move to the parent directory
             }
         }
 
         if (!destinationDir)
         {
-            // Case (9): Destination Directory Not Found
+            // **Case (9): Destination Directory Not Found**
             cout << "Error: Destination directory '" << destinationPath << "' does not exist.\n";
             return;
         }
 
         // **Check if Destination Path is an Existing Directory**
-        bool destIsDirectory = false;
+        bool destIsDirectory = false; // Flag to check if the destination is a directory
         if (!destDirName.empty())
         {
-            int destIndex = destinationDir->searchDirectory(destDirName);
+            int destIndex = destinationDir->searchDirectory(destDirName); // Search for the destination directory
             if (destIndex != -1 && destinationDir->DirOrFiles[destIndex].dir_attr == 0x10)
             {
-                // Destination is an Existing Directory
+                // **Destination is an Existing Directory**
                 destIsDirectory = true;
-                destinationDir = destinationDir->DirOrFiles[destIndex].subDirectory;
+                destinationDir = destinationDir->DirOrFiles[destIndex].subDirectory; // Move to the subdirectory
             }
             else if (destIndex != -1 && destinationDir->DirOrFiles[destIndex].dir_attr != 0x10)
             {
-                // Destination Exists but is Not a Directory
+                // **Destination Exists but is Not a Directory**
                 cout << "Error: Destination path '" << destinationPath << "' is not a directory.\n";
                 return;
             }
             else
             {
-                // Destination Directory Does Not Exist
+                // **Destination Directory Does Not Exist**
                 cout << "Error: Destination directory '" << destinationPath << "' does not exist.\n";
                 return;
             }
         }
 
         // **Iterate Through Source Directory Entries and Copy Files**
-        int filesCopied = 0;
+        int filesCopied = 0; // Counter for the number of files copied
         for (const auto& entry : sourceEntry.subDirectory->DirOrFiles)
         {
-            if (entry.dir_attr == 0x00) // Only Copy Files
+            if (entry.dir_attr == 0x00) // Only Copy Files (0x00 indicates a file)
             {
-                string srcFileName = entry.getName();
-                int destIndex = destinationDir->searchDirectory(srcFileName);
+                string srcFileName = entry.getName(); // Get the source file name
+                int destIndex = destinationDir->searchDirectory(srcFileName); // Check if the file already exists in the destination
 
                 if (destIndex != -1)
                 {
-                    // Case (14): Destination File Exists - Prompt for Overwrite
+                    // **Case (14): Destination File Exists - Prompt for Overwrite**
                     cout << "Error: File with the name '" << srcFileName << "' already exists in the destination directory.\n";
                     cout << "Do you want to overwrite it? (y/n): ";
                     char choice;
@@ -2243,33 +2269,33 @@ void CommandProcessor::handleCopy(const vector<string>& args)
                         continue;
                     }
 
-                    // Overwrite Existing File
+                    // **Overwrite Existing File**
                     Directory_Entry& existingEntry = destinationDir->DirOrFiles[destIndex];
-                    existingEntry = entry; // Assuming Shallow Copy is Sufficient
+                    existingEntry = entry; // Assuming shallow copy is sufficient
                     cout << "File '" << srcFileName << "' overwritten successfully in destination directory.\n";
                     filesCopied++;
                     continue;
                 }
 
-                // Destination File Does Not Exist - Proceed to Copy
+                // **Destination File Does Not Exist - Proceed to Copy**
                 Directory_Entry newFileEntry = entry;
-                newFileEntry.assignDir_Name(srcFileName); // Assign Same Name
+                newFileEntry.assignDir_Name(srcFileName); // Assign the same name
 
                 if (!destinationDir->canAddEntry(newFileEntry))
                 {
-                    // Case (6): Not Enough Space
+                    // **Case (6): Not Enough Space**
                     cout << "Error: Not enough space to copy file '" << srcFileName << "'.\n";
                     continue;
                 }
 
-                destinationDir->addEntry(newFileEntry);
+                destinationDir->addEntry(newFileEntry); // Add the new file to the destination directory
                 cout << "File '" << srcFileName << "' copied successfully to destination directory.\n";
                 filesCopied++;
             }
             // **Note**: Skipping subdirectories as per initial requirements
         }
 
-        // Output Summary of Copied Files
+        // **Output Summary of Copied Files**
         cout << filesCopied << " file(s) copied from directory '" << sourceName << "'.\n";
         return;
     }
@@ -2278,171 +2304,185 @@ void CommandProcessor::handleCopy(const vector<string>& args)
     cout << "Error: Unsupported entry type for '" << sourceName << "'.\n";
 }
 
-
 void CommandProcessor::handleImport(const vector<string>& args) {
+    // **Validate the number of arguments**
+    // Ensure the number of arguments is either 1 (source only) or 2 (source and destination)
     if (args.empty() || args.size() > 2) {
         cout << "Error: Invalid syntax for import command.\n";
         cout << "Usage:\n  import [source]\n  import [source] [destination]\n";
         return;
     }
 
+    // Extract the source path from the arguments
     string source = args[0];
+    // If a destination is provided, use it; otherwise, leave it empty
     string destination = (args.size() == 2) ? args[1] : "";
 
+    // Convert the source path to a filesystem path object for easier manipulation
     fs::path sourcePath(source);
 
-    // Ensure source path is absolute or resolve relative path
+    // **Resolve the source path if it is relative**
+    // If the source path is not absolute, resolve it relative to the current working directory
     if (!sourcePath.is_absolute()) {
         fs::path currentDirPath = fs::current_path(); // Physical disk's current working directory
-        sourcePath = currentDirPath / sourcePath;
+        sourcePath = currentDirPath / sourcePath; // Append the relative path to the current directory
 
-        // If not found, check in the Debug folder
+        // If the resolved path does not exist, check in the Debug folder
         if (!fs::exists(sourcePath)) {
             fs::path debugFolder = "C:\\Users\\omara\\Desktop\\SHELL\\SHELL\\shell\\x64\\Debug";
-            sourcePath = debugFolder / source;
+            sourcePath = debugFolder / source; // Append the source to the Debug folder path
         }
     }
 
-    // Check if the source exists
+    // **Check if the source path exists**
     if (!fs::exists(sourcePath)) {
         cout << "Error: Source path '" << source << "' does not exist.\n";
         return;
     }
 
-    int importedFileCount = 0;
-    vector<string> importedFiles;
+    // Initialize counters and storage for imported files
+    int importedFileCount = 0; // Tracks the total number of files imported
+    vector<string> importedFiles; // Stores the names of successfully imported files
 
+    // **Handle importing a single file**
     if (fs::is_regular_file(sourcePath)) {
-        string fileName = sourcePath.filename().string();
+        string fileName = sourcePath.filename().string(); // Extract the file name from the path
 
-        Directory* targetDir = *currentDirectoryPtr;
+        Directory* targetDir = *currentDirectoryPtr; // Get the current directory in the virtual disk
 
-        // Check if the file already exists in the target directory
+        // **Check if the file already exists in the target directory**
         bool fileExists = false;
         for (const auto& entry : targetDir->DirOrFiles) {
             if (entry.getName() == fileName && entry.getIsFile()) {
-                fileExists = true;
+                fileExists = true; // File already exists
                 break;
             }
         }
 
+        // **Prompt for overwrite if the file exists**
         if (fileExists) {
-            // Prompt to overwrite
             cout << "File '" << fileName << "' already exists. Do you want to overwrite it? (yes/no): ";
             string userChoice;
             getline(cin, userChoice);
             transform(userChoice.begin(), userChoice.end(), userChoice.begin(), ::tolower);
             if (userChoice != "yes") {
                 cout << "Skipped importing '" << fileName << "'.\n";
-                return;
+                return; // Skip import if the user chooses not to overwrite
             }
         }
 
-        // Read the file content
+        // **Read the content of the source file**
         ifstream inputFile(sourcePath, ios::binary);
         if (!inputFile.is_open()) {
             cout << "Error: Unable to open source file '" << sourcePath.string() << "'. Skipping import.\n";
-            return;
+            return; // Skip if the file cannot be opened
         }
         string fileContent((istreambuf_iterator<char>(inputFile)), istreambuf_iterator<char>());
         inputFile.close();
 
-        // Add or overwrite the file in the virtual disk
+        // **Create a new Directory_Entry for the file**
         Directory_Entry newFile(fileName, 0x00, static_cast<int>(fileContent.size()));
-        newFile.setIsFile(true);
-        newFile.setContent(fileContent);
+        newFile.setIsFile(true); // Mark it as a file
+        newFile.setContent(fileContent); // Set the file content
 
+        // **Add or overwrite the file in the virtual disk**
         if (fileExists) {
-            // Overwrite existing file
+            // Overwrite the existing file
             for (auto& entry : targetDir->DirOrFiles) {
                 if (entry.getName() == fileName && entry.getIsFile()) {
-                    entry = newFile;
+                    entry = newFile; // Replace the existing entry
                     break;
                 }
             }
         }
         else {
+            // Add the new file to the directory
             targetDir->addEntry(newFile);
-            importedFiles.push_back(fileName);
+            importedFiles.push_back(fileName); // Track the imported file
         }
 
-        importedFileCount++; // Increment count regardless of overwrite or new addition
+        importedFileCount++; // Increment the imported file count
         cout << "File '" << fileName << "' imported successfully.\n";
     }
+    // **Handle importing a directory**
     else if (fs::is_directory(sourcePath)) {
-        // Handle directory import
+        // Iterate over all entries in the source directory
         for (const auto& entry : fs::directory_iterator(sourcePath)) {
+            // Only process regular files with a .txt extension
             if (entry.is_regular_file() && entry.path().extension() == ".txt") {
-                string fileName = entry.path().filename().string();
+                string fileName = entry.path().filename().string(); // Extract the file name
 
-                // Check if the file already exists
+                // **Check if the file already exists in the virtual disk**
                 bool fileExists = false;
                 for (const auto& dirEntry : (*currentDirectoryPtr)->DirOrFiles) {
                     if (dirEntry.getName() == fileName && dirEntry.getIsFile()) {
-                        fileExists = true;
+                        fileExists = true; // File already exists
                         break;
                     }
                 }
 
+                // **Prompt for overwrite if the file exists**
                 if (fileExists) {
-                    // Prompt to overwrite
                     cout << "File '" << fileName << "' already exists. Do you want to overwrite it? (yes/no): ";
                     string userChoice;
                     getline(cin, userChoice);
                     transform(userChoice.begin(), userChoice.end(), userChoice.begin(), ::tolower);
                     if (userChoice != "yes") {
                         cout << "Skipped importing '" << fileName << "'.\n";
-                        continue;
+                        continue; // Skip this file if the user chooses not to overwrite
                     }
                 }
 
-                // Read the file content
+                // **Read the content of the source file**
                 ifstream inputFile(entry.path(), ios::binary);
                 if (!inputFile.is_open()) {
                     cout << "Error: Unable to open source file '" << entry.path().string() << "'. Skipping import.\n";
-                    continue;
+                    continue; // Skip if the file cannot be opened
                 }
                 string fileContent((istreambuf_iterator<char>(inputFile)), istreambuf_iterator<char>());
                 inputFile.close();
 
-                // Add or overwrite the file in the virtual disk
+                // **Create a new Directory_Entry for the file**
                 Directory_Entry newFile(fileName, 0x00, static_cast<int>(fileContent.size()));
-                newFile.setIsFile(true);
-                newFile.setContent(fileContent);
+                newFile.setIsFile(true); // Mark it as a file
+                newFile.setContent(fileContent); // Set the file content
 
+                // **Add or overwrite the file in the virtual disk**
                 if (fileExists) {
                     for (auto& dirEntry : (*currentDirectoryPtr)->DirOrFiles) {
                         if (dirEntry.getName() == fileName && dirEntry.getIsFile()) {
-                            dirEntry = newFile;
+                            dirEntry = newFile; // Replace the existing entry
                             break;
                         }
                     }
                 }
                 else {
-                    (*currentDirectoryPtr)->addEntry(newFile);
-                    importedFiles.push_back(fileName);
+                    (*currentDirectoryPtr)->addEntry(newFile); // Add the new file
+                    importedFiles.push_back(fileName); // Track the imported file
                 }
 
-                importedFileCount++; // Increment count regardless of overwrite or new addition
+                importedFileCount++; // Increment the imported file count
                 cout << "File '" << fileName << "' imported successfully.\n";
             }
         }
     }
+    // **Handle invalid source paths**
     else {
         cout << "Error: Source path is not a valid file or directory.\n";
         return;
     }
 
-    // Display summary of imported files
+    // **Display a summary of imported files**
     cout << "\nTotal files imported: " << importedFileCount << "\n";
     for (const auto& file : importedFiles) {
-        cout << "  - " << file << "\n";
+        cout << "  - " << file << "\n"; // List all imported files
     }
 }
 
 void CommandProcessor::handleExport(const vector<string>& args)
 {
     // **Check for valid number of arguments**
+    // Ensure the number of arguments is either 1 (source only) or 2 (source and destination)
     if (args.size() < 1 || args.size() > 2)
     {
         cout << "Error: Invalid syntax for export command.\n";
@@ -2450,21 +2490,38 @@ void CommandProcessor::handleExport(const vector<string>& args)
         return;
     }
 
+    // Extract the source path from the arguments
     string sourcePath = args[0];
-    string destinationPath = (args.size() == 2) ? args[1] : fs::current_path().string();
+    string destinationPath;
 
+    // **Determine the destination path**
+    // If a destination path is provided, use it; otherwise, default to the Debug folder
+    if (args.size() == 2)
+    {
+        destinationPath = args[1];
+    }
+    else
+    {
+        // Default destination path: Debug folder
+        destinationPath = "C:\\Users\\omara\\Desktop\\SHELL\\SHELL\\shell\\x64\\Debug";
+    }
+
+    // Get the current directory pointer
     Directory* currentDir = *currentDirectoryPtr;
     Directory_Entry* sourceEntry = nullptr;
 
-    // **Check if source path is absolute**
+    // **Check if the source path is absolute**
+    // An absolute path typically starts with a drive letter (e.g., "C:\")
     bool isSourceAbsolutePath = (sourcePath.length() >= 3 && isalpha(sourcePath[0]) && sourcePath[1] == ':' && (sourcePath[2] == '\\' || sourcePath[2] == '/'));
 
-    // **Resolve source path**
+    // **Resolve the source path**
     if (isSourceAbsolutePath)
     {
+        // Split the absolute path into directory path and entry name
         string dirPath = sourcePath.substr(0, sourcePath.find_last_of("\\/"));
         string entryName = sourcePath.substr(sourcePath.find_last_of("\\/") + 1);
 
+        // Move to the directory specified in the absolute path
         Directory* resolvedDir = MoveToDir(dirPath);
         if (!resolvedDir)
         {
@@ -2472,6 +2529,7 @@ void CommandProcessor::handleExport(const vector<string>& args)
             return;
         }
 
+        // Search for the entry (file or directory) in the resolved directory
         int entryIndex = resolvedDir->searchDirectory(entryName);
         if (entryIndex == -1)
         {
@@ -2479,10 +2537,12 @@ void CommandProcessor::handleExport(const vector<string>& args)
             return;
         }
 
+        // Get the entry from the resolved directory
         sourceEntry = &resolvedDir->DirOrFiles[entryIndex];
     }
     else
     {
+        // If the source path is relative, search for the entry in the current directory
         int entryIndex = currentDir->searchDirectory(sourcePath);
         if (entryIndex == -1)
         {
@@ -2490,27 +2550,34 @@ void CommandProcessor::handleExport(const vector<string>& args)
             return;
         }
 
+        // Get the entry from the current directory
         sourceEntry = &currentDir->DirOrFiles[entryIndex];
     }
 
-    int exportedFiles = 0; // Counter for exported files
+    int exportedFiles = 0; // Counter to keep track of the number of files exported
 
     // **Handle directory export**
-    if (sourceEntry->dir_attr == 0x10) // Directory
+    if (sourceEntry->dir_attr == 0x10) // Check if the source entry is a directory
     {
+        // Create a Directory object for the source directory
         Directory sourceDir(sourceEntry->getName(), sourceEntry->dir_attr, sourceEntry->dir_firstCluster, currentDir);
-        sourceDir.readDirectory();
+        sourceDir.readDirectory(); // Read the contents of the directory
 
+        // Iterate over each entry in the source directory
         for (const auto& entry : sourceDir.DirOrFiles)
         {
-            if (entry.dir_attr != 0x10) // Export files only
+            // Only export files (skip subdirectories)
+            if (entry.dir_attr != 0x10)
             {
+                // Create a File_Entry object for the file
                 File_Entry file(entry, &sourceDir);
-                file.readFileContent();
+                file.readFileContent(); // Read the content of the file
 
+                // Construct the destination file path
                 string destinationFilePath = (fs::path(destinationPath) / entry.getName()).string();
 
                 // **Check for overwrite**
+                // If the destination file already exists, prompt the user for confirmation
                 if (fs::exists(destinationFilePath))
                 {
                     cout << "File '" << destinationFilePath << "' already exists. Overwrite? (yes/no): ";
@@ -2524,6 +2591,7 @@ void CommandProcessor::handleExport(const vector<string>& args)
                     }
                 }
 
+                // Open the destination file for writing in binary mode
                 ofstream outFile(destinationFilePath, ios::binary);
                 if (!outFile.is_open())
                 {
@@ -2531,30 +2599,36 @@ void CommandProcessor::handleExport(const vector<string>& args)
                     continue;
                 }
 
+                // Write the file content to the destination file
                 outFile.write(file.content.c_str(), file.content.size());
                 outFile.close();
 
-                exportedFiles++;
+                exportedFiles++; // Increment the exported files counter
             }
         }
 
+        // Print the total number of files exported from the directory
         cout << "Total files exported from '" << sourceDir.getFullPath() << "': " << exportedFiles << "\n";
         return;
     }
 
     // **Handle single file export**
-    if (sourceEntry->dir_attr != 0x10)
+    if (sourceEntry->dir_attr != 0x10) // Check if the source entry is a file
     {
+        // Create a File_Entry object for the file
         File_Entry file(*sourceEntry, currentDir);
-        file.readFileContent();
+        file.readFileContent(); // Read the content of the file
 
+        // Determine the destination file path
         string destinationFilePath = destinationPath;
         if (fs::is_directory(destinationPath))
         {
+            // If the destination is a directory, append the source file name to it
             destinationFilePath = (fs::path(destinationPath) / sourceEntry->getName()).string();
         }
 
         // **Check for overwrite**
+        // If the destination file already exists, prompt the user for confirmation
         if (fs::exists(destinationFilePath))
         {
             cout << "File '" << destinationFilePath << "' already exists. Overwrite? (yes/no): ";
@@ -2568,6 +2642,7 @@ void CommandProcessor::handleExport(const vector<string>& args)
             }
         }
 
+        // Open the destination file for writing in binary mode
         ofstream outFile(destinationFilePath, ios::binary);
         if (!outFile.is_open())
         {
@@ -2575,10 +2650,13 @@ void CommandProcessor::handleExport(const vector<string>& args)
             return;
         }
 
+        // Write the file content to the destination file
         outFile.write(file.content.c_str(), file.content.size());
         outFile.close();
 
-        exportedFiles++;
+        exportedFiles++; // Increment the exported files counter
+
+        // Print success message and the total number of files exported
         cout << "File '" << sourceEntry->getName() << "' exported successfully to '" << destinationFilePath << "'.\n";
         cout << "Total files exported: " << exportedFiles << "\n";
         return;
