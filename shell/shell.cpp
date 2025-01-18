@@ -32,9 +32,11 @@ int main()
     // Initialize the command processor with the current directory pointer
     CommandProcessor cmdProcessor(&currentDir);
     bool isRunning = true;
-    cout << "************************************************************************************************************************"<<endl;
-    cout << "                                                    Welcome To The Shell                                         " << endl;
-    cout << "************************************************************************************************************************" << endl;
+    cout << "*************************************************************************************************" << endl;
+    cout << "*                                                                                               *" << endl;
+    cout << "*                                      Welcome To The Shell                                     *" << endl;
+    cout << "*                                                                                               *" << endl;
+    cout << "*************************************************************************************************" << endl;
     // Shell loop
     while (isRunning)
     {

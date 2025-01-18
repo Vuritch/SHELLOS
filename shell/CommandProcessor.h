@@ -21,8 +21,8 @@ public:
     CommandProcessor(Directory** currentDirPtr);
     // Process the input command
     void processCommand(const string& input, bool& isRunning);
-    std::string toLower(const std::string& s);
-    std::string toUpper(const std::string& s);
+    string toLower(const  string& s);
+    string toUpper(const  string& s);
     string trimString(const string& input);
 private:
     void showGeneralHelp();
@@ -42,8 +42,8 @@ private:
     void handleDel(const vector<string>& targets);
     void handleRename(const vector<string>& args);
     void handleCopy(const vector<string>& args);
+    void handleImport(const  vector< string>& args);
     void handleExport(const vector<string>& args);
-    void handleImport(const std::vector<std::string>& args);
     Directory* MoveToDir(const string& path);
     File_Entry* MoveToFile(string& path);
     vector<string> commandHistory;

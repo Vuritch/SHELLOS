@@ -4,7 +4,7 @@
 using namespace std;
 
 // Function to parse command tokens into a Command structure
-Command Parser::parse(const std::vector<std::string>& tokens) {
+Command Parser::parse(const  vector< string>& tokens) {
     Command cmd;
     if (!tokens.empty()) {
         cmd.name = tokens[0];
@@ -16,7 +16,7 @@ Command Parser::parse(const std::vector<std::string>& tokens) {
 }
 
 // Function to parse a directory path into parent path and directory name
-std::pair<std::string, std::string> Parser::parsePath(const std::string& dirPath) {
+ pair< string,  string> Parser::parsePath(const  string& dirPath) {
     string parentPath;
     string dirName;
 
