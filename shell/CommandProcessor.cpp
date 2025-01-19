@@ -1,29 +1,249 @@
 #include "CommandProcessor.h"
+#include "File_Entry.h"
 #include "Directory.h"
 #include"Mini_FAT.h"
+#include "Parser.h"
 #include <algorithm>
 #include <cstring>
 #include <cctype>
 #include <sstream> 
-#include "File_Entry.h"
 #include<iostream>
 #include <iomanip>
 #include <ios>
-#include "Parser.h"
 #include <fstream>    
 #include <filesystem>
-namespace fs =  filesystem;
 using namespace std;
-
 
 // Constructor for the CommandProcessor class
 // Initializes the command help map and sets the current directory pointer.
 CommandProcessor::CommandProcessor(Directory** currentDirPtr)
-    : currentDirectoryPtr(currentDirPtr) // Initialize member variable with provided pointer
+    : currentDirectoryPtr(currentDirPtr), currentDir(nullptr) // Initialize member variable with provided pointer
 {
-    // Add help command details to the commandHelp map
+    // **File and Directory Management Commands**
+
+    // Add the "md" (make directory) command details to the commandHelp map
+    commandHelp["md"] = {
+        "Creates a new directory.",
+        "Usage:\n"
+        "  md [path]\n\n"
+        "Syntax:\n"
+        "  - Create a directory: `md [directory_name]`\n"
+        "  - Create a directory with a specific path: `md [path/to/directory]`\n\n"
+        "Description:\n"
+        "  - Creates a new directory in the specified path or current directory."
+    };
+
+    // Add the "rd" (remove directory) command details to the commandHelp map
+    commandHelp["rd"] = {
+        "Removes one or more directories.",
+        "Usage:\n"
+        "  rd [directory_name]+\n\n"
+        "Syntax:\n"
+        "  - Remove a single directory: `rd [directory_name]`\n"
+        "  - Remove multiple directories: `rd [directory1] [directory2] ...`\n\n"
+        "Description:\n"
+        "  - Deletes the specified directory or directories.\n"
+        "  - Each directory must be empty before it can be deleted."
+    };
+
+    // Add the "cd" command details to the commandHelp map
+    commandHelp["cd"] = {
+        "Changes the current directory.",
+        "Usage:\n"
+        "  cd\n"
+        "  cd [directory]\n\n"
+        "Syntax:\n"
+        "  - Show current directory: `cd`\n"
+        "  - Change to a specific directory: `cd [directory_name]`\n"
+        "  - Move up one level: `cd ..`\n"
+        "  - Move up multiple levels: `cd ../../..`\n\n"
+        "Description:\n"
+        "  - Changes the current working directory to the specified one.\n"
+        "  - Accepts relative or absolute paths.\n"
+        "  - Using `cd` without arguments displays the current directory."
+    };
+
+    // Add the "dir" command details to the commandHelp map
+    commandHelp["dir"] = {
+        "Lists the contents of a directory.",
+        "Usage:\n"
+        "  dir\n"
+        "  dir [directory_path]\n\n"
+        "Syntax:\n"
+        "  - List current directory: `dir`\n"
+        "  - List contents of a specific directory: `dir [directory_path]`\n\n"
+        "Description:\n"
+        "  - Displays files and subdirectories in the specified directory.\n"
+        "  - Includes detailed statistics such as:\n"
+        "    - File count\n"
+        "    - Directory count\n"
+        "    - Total used space\n"
+        "    - Free space"
+    };
+
+    // Add the "pwd" command details to the commandHelp map
+    commandHelp["pwd"] = {
+        "Displays the full path of the current directory.",
+        "Usage:\n"
+        "  pwd\n\n"
+        "Syntax:\n"
+        "  - Display the current directory: `pwd`\n\n"
+        "Description:\n"
+        "  - Prints the absolute path of the current working directory.\n"
+        "  - Useful for confirming your location in the directory structure."
+    };
+
+    // **File Manipulation Commands**
+
+    // Add the "echo" command details to the commandHelp map
+    commandHelp["echo"] = {
+        "Creates a new empty file.",
+        "Usage:\n"
+        "  echo [path]\n\n"
+        "Syntax:\n"
+        "  - Create a file: `echo [file_name]`\n"
+        "  - Create a file in a specific path: `echo [path/to/file]`\n\n"
+        "Description:\n"
+        "  - Creates a new empty file at the specified path or in the current directory."
+    };
+
+    // Add the "write" command details to the commandHelp map
+    commandHelp["write"] = {
+        "Writes content to an existing file.",
+        "Usage:\n"
+        "  write [file_path]\n\n"
+        "Syntax:\n"
+        "  - Write to a file: `write [file_name]`\n"
+        "  - Write to a file in a specific path: `write [path/to/file]`\n\n"
+        "Description:\n"
+        "  - Opens the specified file for writing.\n"
+        "  - Allows input of multiple lines of text until a specific termination input is given."
+    };
+
+    // Add the "type" command details to the commandHelp map
+    commandHelp["type"] = {
+        "Displays the content of a file.",
+        "Usage:\n"
+        "  type [file_path]\n\n"
+        "Syntax:\n"
+        "  - Display file content: `type [file_name]`\n"
+        "  - Display content of a file in a specific path: `type [path/to/file]`\n\n"
+        "Description:\n"
+        "  - Reads and displays the content of the specified file.\n"
+        "  - Displays an error if the file is not found or is a directory.\n"
+        "  - Supports text-based files; non-readable formats may display as gibberish."
+    };
+
+    // Add the "del" command details to the commandHelp map
+    commandHelp["del"] = {
+        "Deletes one or more files.",
+        "Usage:\n"
+        "  del [file|directory]+\n\n"
+        "Syntax:\n"
+        "  - Delete a single file: `del [file_name]`\n"
+        "  - Delete multiple files: `del [file1] [file2] ...`\n\n"
+        "Description:\n"
+        "  - Deletes the specified file(s).\n"
+        "  - Does not delete subdirectories or their contents.\n"
+        "  - Wildcards (e.g., `*` or `?`) can be used to match multiple files (if supported)."
+    };
+
+    // Add the "rename" command details to the commandHelp map
+    commandHelp["rename"] = {
+        "Renames a file.",
+        "Usage:\n"
+        "  rename [fileName] [new fileName]\n\n"
+        "Syntax:\n"
+        "  - Rename a file: `rename [current_name] [new_name]`\n\n"
+        "Description:\n"
+        "  - Renames a file in the current directory or at a specified path.\n"
+        "  - The new file name must not already exist.\n"
+        "  - Displays an error if the source file does not exist or if the new name conflicts with an existing file."
+    };
+
+    // **Import/Export Commands**
+
+    // Add the "import" command details to the commandHelp map
+    commandHelp["import"] = {
+        "Imports text file(s) from your computer into the virtual disk.",
+        "Usage:\n"
+        "  import [source]\n"
+        "  import [source] [destination]\n\n"
+        "Syntax:\n"
+        "  - Import a file: `import [file_path]`\n"
+        "  - Import a file to a specific location: `import [file_path] [destination]`\n\n"
+        "Description:\n"
+        "  - Transfers files from your physical disk to the virtual disk.\n"
+        "  - If no destination is specified, the file is imported to the current directory on the virtual disk.\n"
+        "  - Overwrites existing files in the destination if a file with the same name exists."
+    };
+
+    // Add the "export" command details to the commandHelp map
+    commandHelp["export"] = {
+        "Exports text file(s) from the virtual disk to your computer.",
+        "Usage:\n"
+        "  export [source]\n"
+        "  export [source] [destination]\n\n"
+        "Syntax:\n"
+        "  - Export a file: `export [file_path]`\n"
+        "  - Export a file to a specific location: `export [file_path] [destination]`\n\n"
+        "Description:\n"
+        "  - Transfers files from the virtual disk to your physical disk.\n"
+        "  - [source] can be a file name or the full path of a file on the virtual disk.\n"
+        "  - [destination] specifies the location on your physical disk where the file will be exported.\n"
+        "  - If no destination is provided, the file is exported to the current working directory on the physical disk.\n"
+        "  - The command overwrites the file in the destination if it already exists.\n"
+        "  - Displays an error if the source file does not exist or cannot be accessed."
+    };
+
+    // **Utility Commands**
+
+    // Add the "copy" command details to the commandHelp map
+    commandHelp["copy"] = {
+        "Copies one or more files or directories to another location.",
+        "Usage:\n"
+        "  copy [source]\n"
+        "  copy [source] [destination]\n\n"
+        "Description:\n"
+        "  - Copies files or directories from the source to the destination.\n"
+        "  - [source] can be a file name, full path to a file, directory name, or full path to a directory.\n"
+        "  - [destination] can be a file name, full path to a file, directory name, or full path to a directory.\n"
+        "  - If the destination is not provided, the file or directory is copied to the current directory.\n"
+        "  - Prompts for confirmation before overwriting if the destination already exists.\n"
+        "  - Supports recursive copying of directory contents when the source is a directory.\n\n"
+        "Syntax:\n"
+        "  copy [source]\n"
+        "  copy [source] [destination]\n"
+    };
+
+    // Add the "cls" command details to the commandHelp map
+    commandHelp["cls"] = {
+        "Clears the screen.",
+        "Usage:\n"
+        "  cls\n\n"
+        "Syntax:\n"
+        "  - Clear the screen: `cls`\n\n"
+        "Description:\n"
+        "  - Removes all previous outputs and displays a clean prompt.\n"
+        "  - This command does not delete or modify data; it only refreshes the display."
+    };
+
+    // Add the "history" command details to the commandHelp map
+    commandHelp["history"] = {
+        "Displays the history of executed commands.",
+        "Usage:\n"
+        "  history\n\n"
+        "Syntax:\n"
+        "  - Show command history: `history`\n\n"
+        "Description:\n"
+        "  - Lists all the commands entered in the current session.\n"
+        "  - Useful for reviewing past actions or re-executing commands.\n"
+        "  - Command entries are indexed, allowing easy selection if re-execution functionality is supported."
+    };
+
+    // Add the "help" command details to the commandHelp map
     commandHelp["help"] = {
-        "Provides help information for commands.", // Brief description of the command
+        "Provides help information for commands.",
         "Usage:\n"
         "  help\n"
         "  help [command]\n\n"
@@ -35,389 +255,16 @@ CommandProcessor::CommandProcessor(Directory** currentDirPtr)
         "  - For a specific command, provides detailed information, including its usage and syntax."
     };
 
-
-
-    // Add the "rd" (remove directory) command details to the commandHelp map
-    commandHelp["rd"] = {
-        // Brief description of the command
-        "Removes one or more directories.",
-
-        // Detailed usage instructions
-        "Usage:\n"
-        "  rd [directory_name]+\n\n"
-
-        // Syntax explanation
-        "Syntax:\n"
-        "  - Remove a single directory: `rd [directory_name]`\n"
-        "  - Remove multiple directories: `rd [directory1] [directory2] ...`\n\n"
-
-        // Description of the command
-        "Description:\n"
-        "  - Deletes the specified directory or directories.\n"
-        "  - Each directory must be empty before it can be deleted."
-    };
-
-
-
-    // Add the "md" (make directory) command details to the commandHelp map
-    commandHelp["md"] = {
-        // Brief description of the command
-        "Creates a new directory.",
-
-        // Usage examples for the command
-        "Usage:\n"
-        "  md [path]\n\n"
-
-        // Syntax explanation
-        "Syntax:\n"
-        "  - Create a directory: `md [directory_name]`\n"
-        "  - Create a directory with a specific path: `md [path/to/directory]`\n\n"
-
-        // Detailed description
-        "Description:\n"
-        "  - Creates a new directory in the specified path or current directory."
-    };
-
-
-
-    // Add the "echo" command details to the commandHelp map
-    // Provides information about creating new empty files
-    commandHelp["echo"] = {
-        // Brief description of the command
-        "Creates a new empty file.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  echo [path]\n\n"
-
-        // Syntax explanation
-        "Syntax:\n"
-        "  - Create a file: `echo [file_name]`\n"
-        "  - Create a file in a specific path: `echo [path/to/file]`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Creates a new empty file at the specified path or in the current directory."
-    };
-
-
-
-    // Add the "write" command details to the commandHelp map
-    // Provides information about writing content to an existing file
-    commandHelp["write"] = {
-        // Brief description of the command
-        "Writes content to an existing file.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  write [file_path]\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - Write to a file: `write [file_name]`\n"
-        "  - Write to a file in a specific path: `write [path/to/file]`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Opens the specified file for writing.\n"
-        "  - Allows input of multiple lines of text until a specific termination input is given."
-    };
-
-
-
-    // Add the "dir" command details to the commandHelp map
-    // Provides information about listing the contents of a directory
-    commandHelp["dir"] = {
-        // Brief description of the command
-        "Lists the contents of a directory.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  dir\n"
-        "  dir [directory_path]\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - List current directory: `dir`\n"
-        "  - List contents of a specific directory: `dir [directory_path]`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Displays files and subdirectories in the specified directory.\n"
-        "  - Includes detailed statistics such as:\n"
-        "    - File count\n"
-        "    - Directory count\n"
-        "    - Total used space\n"
-        "    - Free space"
-    };
-
-
-
-    // Add the "del" command details to the commandHelp map
-    // Provides information about deleting one or more files
-    commandHelp["del"] = {
-        // Brief description of the command
-        "Deletes one or more files.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  del [file|directory]+\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - Delete a single file: `del [file_name]`\n"
-        "  - Delete multiple files: `del [file1] [file2] ...`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Deletes the specified file(s).\n"
-        "  - Does not delete subdirectories or their contents.\n"
-        "  - Wildcards (e.g., `*` or `?`) can be used to match multiple files (if supported)."
-    };
-
-
-
-
-    // Add the "cd" command details to the commandHelp map
-    // Provides information about changing the current working directory
-    commandHelp["cd"] = {
-        // Brief description of the command
-        "Changes the current directory.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  cd\n"
-        "  cd [directory]\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - Show current directory: `cd`\n"
-        "  - Change to a specific directory: `cd [directory_name]`\n"
-        "  - Move up one level: `cd ..`\n"
-        "  - Move up multiple levels: `cd ../../..`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Changes the current working directory to the specified one.\n"
-        "  - Accepts relative or absolute paths.\n"
-        "  - Using `cd` without arguments displays the current directory."
-    };
-
-
-
-    // Add the "pwd" command details to the commandHelp map
-    // Provides information about displaying the current working directory path
-    commandHelp["pwd"] = {
-        // Brief description of the command
-        "Displays the full path of the current directory.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  pwd\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - Display the current directory: `pwd`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Prints the absolute path of the current working directory.\n"
-        "  - Useful for confirming your location in the directory structure."
-    };
-
-
-
-    // Add the "type" command details to the commandHelp map
-    // Provides information about displaying the content of a file
-    commandHelp["type"] = {
-        // Brief description of the command
-        "Displays the content of a file.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  type [file_path]\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - Display file content: `type [file_name]`\n"
-        "  - Display content of a file in a specific path: `type [path/to/file]`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Reads and displays the content of the specified file.\n"
-        "  - Displays an error if the file is not found or is a directory.\n"
-        "  - Supports text-based files; non-readable formats may display as gibberish."
-    };
-
-
-
-    // Add the "history" command details to the commandHelp map
-    // Provides information about displaying the history of executed commands
-    commandHelp["history"] = {
-        // Brief description of the command
-        "Displays the history of executed commands.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  history\n\n"
-
-        // Syntax explanation
-        "Syntax:\n"
-        "  - Show command history: `history`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Lists all the commands entered in the current session.\n"
-        "  - Useful for reviewing past actions or re-executing commands.\n"
-        "  - Command entries are indexed, allowing easy selection if re-execution functionality is supported."
-    };
-
-
-
-    // Add the "import" command details to the commandHelp map
-    // Provides information about importing files into the virtual disk
-    commandHelp["import"] = {
-        // Brief description of the command
-        "Imports text file(s) from your computer into the virtual disk.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  import [source]\n"
-        "  import [source] [destination]\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - Import a file: `import [file_path]`\n"
-        "  - Import a file to a specific location: `import [file_path] [destination]`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Transfers files from your physical disk to the virtual disk.\n"
-        "  - If no destination is specified, the file is imported to the current directory on the virtual disk.\n"
-        "  - Overwrites existing files in the destination if a file with the same name exists."
-    };
-
-
-
-    // Add the "export" command details to the commandHelp map
-    // Provides information about exporting files from the virtual disk to the physical disk
-    commandHelp["export"] = {
-        // Brief description of the command
-        "Exports text file(s) from the virtual disk to your computer.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  export [source]\n"
-        "  export [source] [destination]\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - Export a file: `export [file_path]`\n"
-        "  - Export a file to a specific location: `export [file_path] [destination]`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Transfers files from the virtual disk to your physical disk.\n"
-        "  - [source] can be a file name or the full path of a file on the virtual disk.\n"
-        "  - [destination] specifies the location on your physical disk where the file will be exported.\n"
-        "  - If no destination is provided, the file is exported to the current working directory on the physical disk.\n"
-        "  - The command overwrites the file in the destination if it already exists.\n"
-        "  - Displays an error if the source file does not exist or cannot be accessed."
-    };
-
-
-
-    // Add the "rename" command details to the commandHelp map
-    // Provides information about renaming files
-    commandHelp["rename"] = {
-        // Brief description of the command
-        "Renames a file.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  rename [fileName] [new fileName]\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  - Rename a file: `rename [current_name] [new_name]`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Renames a file in the current directory or at a specified path.\n"
-        "  - The new file name must not already exist.\n"
-        "  - Displays an error if the source file does not exist or if the new name conflicts with an existing file."
-    };
-
-
-
     // Add the "quit" command details to the commandHelp map
-    // Provides information about exiting the application
     commandHelp["quit"] = {
-        // Brief description of the command
         "Exits the application.",
-
-        // Usage instructions
         "Usage:\n"
         "  quit\n\n"
-
-        // Syntax explanation
         "Syntax:\n"
         "  - Exit the application: `quit`\n\n"
-
-        // Detailed description of the command
         "Description:\n"
         "  - Terminates the current session and closes the application gracefully.\n"
         "  - Ensures all resources are freed and any pending changes are saved before exiting."
-    };
-
-
-
-    // Add the "copy" command details to the commandHelp map
-    // Provides information about copying files or directories
-    commandHelp["copy"] = {
-        // Brief description of the command
-        "Copies one or more files or directories to another location.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  copy [source]\n"
-        "  copy [source] [destination]\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Copies files or directories from the source to the destination.\n"
-        "  - [source] can be a file name, full path to a file, directory name, or full path to a directory.\n"
-        "  - [destination] can be a file name, full path to a file, directory name, or full path to a directory.\n"
-        "  - If the destination is not provided, the file or directory is copied to the current directory.\n"
-        "  - Prompts for confirmation before overwriting if the destination already exists.\n"
-        "  - Supports recursive copying of directory contents when the source is a directory.\n\n"
-
-        // Syntax explanation with examples
-        "Syntax:\n"
-        "  copy [source]\n"
-        "  copy [source] [destination]\n"
-    };
-
-
-
-    // Add the "cls" command details to the commandHelp map
-    // Provides information about clearing the screen
-    commandHelp["cls"] = {
-        // Brief description of the command
-        "Clears the screen.",
-
-        // Usage instructions
-        "Usage:\n"
-        "  cls\n\n"
-
-        // Syntax explanation
-        "Syntax:\n"
-        "  - Clear the screen: `cls`\n\n"
-
-        // Detailed description of the command
-        "Description:\n"
-        "  - Removes all previous outputs and displays a clean prompt.\n"
-        "  - This command does not delete or modify data; it only refreshes the display."
     };
 }
 
@@ -685,7 +532,6 @@ void CommandProcessor::processCommand(const string& input, bool& isRunning)
     }
 }
 
-
 // Converts a given string to lowercase
 string CommandProcessor::toLower(const string& s)
 {
@@ -699,8 +545,6 @@ string CommandProcessor::toLower(const string& s)
     // Return the lowercase version of the string
     return result;
 }
-
-
 
 // Converts a given string to uppercase
 string CommandProcessor::toUpper(const string& s)
@@ -716,47 +560,39 @@ string CommandProcessor::toUpper(const string& s)
     return result;
 }
 
-
 // Removes leading and trailing whitespace characters from a string
 string CommandProcessor::trimString(const string& input)
 {
     string result = input;
 
-    // Trim leading spaces (whitespace characters: space, tab, carriage return, newline)
-    result.erase(0, result.find_first_not_of(" \t\r\n"));
+    // Trim leading spaces (whitespace characters: space, tab, newline)
+    result.erase(0, result.find_first_not_of(" \t\n"));
 
     // Trim trailing spaces
-    result.erase(result.find_last_not_of(" \t\r\n") + 1);
+    result.erase(result.find_last_not_of(" \t\n") + 1);
 
     // Return the trimmed string
     return result;
 }
 
-
 // Displays a list of available commands with brief descriptions
 void CommandProcessor::showGeneralHelp()
 {
+    // Display the header
     cout << "Available Commands:\n";
-    cout << "-----------------------------------------------------------------------------------\n";
+    cout << "-------------------------------------------------------------------------------\n";
 
-    // Determine the maximum length of command names for alignment
-    size_t maxCommandLength = 0;
+    // Display each command with its description
+    int count = 1; // Counter for numbering commands
     for (const auto& cmd : commandHelp)
     {
-        maxCommandLength = max(maxCommandLength, cmd.first.length());
-    }
-
-    // Iterate through the commandHelp map and display each command with its description
-    int count = 1;
-    for (const auto& cmd : commandHelp)
-    {
-        cout << "  " << setw(2) << count << ". " // Align command numbers
-            << left << setw(maxCommandLength + 2) << cmd.first // Align command names
-            << "- " << cmd.second.first << "\n"; // Description
+        // Print the command number, name, and description
+        cout << "  " << count << ". " << cmd.first << " - " << cmd.second.first << "\n";
         count++;
     }
 
-    cout << "-----------------------------------------------------------------------------------\n";
+    // Display the footer
+    cout << "-------------------------------------------------------------------------------\n";
 }
 
 // Displays detailed help information for a specific command
@@ -776,12 +612,9 @@ void CommandProcessor::showCommandHelp(const string& command)
     else
     {
         // Display an error message if the command is not recognized
-        cout << "Error: Command '" << command << "' is not supported.\n";
+        cout << "Error: Command '" << command << "' is not supported in this Shell.\n";
     }
 }
-
-
-
 
 // Clears the console screen
 void CommandProcessor::handleCls()
@@ -790,8 +623,6 @@ void CommandProcessor::handleCls()
     // On Windows, the "cls" command clears the console screen
     system("cls");
 }
-
-
 
 // Handles the "md" command to create a new directory
 void CommandProcessor::handleMd(const string& dirPath)
@@ -845,7 +676,7 @@ void CommandProcessor::handleMd(const string& dirPath)
     }
 
     // Step 8: Initialize the new directory's FAT pointer
-    Mini_FAT::setClusterPointer(newCluster, -1); // -1 indicates end of file (EOF)
+    Mini_FAT::setClusterPointer(newCluster, -1); // -1 indicates end of file
 
     // Step 9: Clean the directory name without altering its case
     string cleanedName = Directory_Entry::cleanTheName(dirName);
@@ -856,12 +687,12 @@ void CommandProcessor::handleMd(const string& dirPath)
 
     // Step 10: Create a new Directory object
     Directory* newDir = new Directory(cleanedName, 0x10, newCluster, parentDir);
-    newDir->readDirectory(); // Initialize directory entries (e.g., add '.' and '..')
+    newDir->readDirectory(); // Initialize directory entries
 
     // Step 11: Create a Directory_Entry for the new directory
     Directory_Entry newDirEntry(cleanedName, 0x10, newCluster);
 
-    // Step 12: Manually assign the subDirectory pointer
+    // Step 12: Assign the subDirectory pointer
     newDirEntry.subDirectory = newDir;
 
     // Step 13: Add the new directory entry to the parent directory's DirOrFiles list
@@ -874,8 +705,6 @@ void CommandProcessor::handleMd(const string& dirPath)
     cout << "Directory '" << cleanedName << "' created successfully.\n";
 }
 
-
-
 // Handles the "rd" command to delete one or more directories
 void CommandProcessor::handleRd(const vector<string>& directories)
 {
@@ -884,7 +713,7 @@ void CommandProcessor::handleRd(const vector<string>& directories)
         // Step 1: Confirm deletion from the user
         cout << "Are you sure you want to delete directory '" << dirPath << "'? (y/n): ";
         string input;
-        getline(cin, input); // Use getline to handle multi-character input safely
+        getline(cin, input); // Use getline to handle multi-character
 
         // If the user does not confirm, skip this directory
         if (input.empty() || (input[0] != 'y' && input[0] != 'Y')) {
@@ -939,49 +768,48 @@ void CommandProcessor::handleRd(const vector<string>& directories)
     }
 }
 
-
-
-
-
 // Handles the "cd" command to navigate directories
 void CommandProcessor::handleCd(const string& path)
 {
+    // **Step 1: Handle Empty Path**
     if (path.empty())
     {
-        // Step 1: Display the current directory if no path is provided
+        // If no path is provided, display the current directory
         cout << "Current Directory: " << (*currentDirectoryPtr)->getFullPath() << "\n";
         return;
     }
 
-    // Step 2: Handle special cases for "." and ".."
+    // **Step 2: Handle Special Cases for "." and ".."**
     if (path == ".")
     {
-        // "." indicates the current directory; no action is required
+        // "." refers to the current directory; no action is needed
         cout << "Navigating to current directory (no change).\n";
         return;
     }
     else if (path == "..")
     {
-        // ".." indicates the parent directory
+        // ".." refers to the parent directory
         if ((*currentDirectoryPtr)->parent != nullptr)
         {
+            // Move to the parent directory
             *currentDirectoryPtr = (*currentDirectoryPtr)->parent;
             cout << "Changed directory to: " << (*currentDirectoryPtr)->getFullPath() << "\n";
         }
         else
         {
+            // If already at the root directory, display an error
             cout << "Error: Already at the root directory.\n";
         }
         return;
     }
 
-    // Step 3: Determine if the path is absolute
-    bool isAbsolute = false;
-    Directory* traversalDir = *currentDirectoryPtr;
-    string drive = "";
-    size_t startIndex = 0;
+    // **Step 3: Determine if the Path is Absolute**
+    bool isAbsolute = false; // Flag to check if the path is absolute
+    Directory* traversalDir = *currentDirectoryPtr; // Start traversal from the current directory
+    string drive = ""; // Store the drive letter (e.g., "C:")
+    size_t startIndex = 0; // Index to start parsing the path
 
-    // Step 4: Check if the path starts with a drive letter (e.g., "C:\")
+    // **Step 4: Check if the Path Starts with a Drive Letter (e.g., "C:\")**
     if (path.length() >= 3 && isalpha(path[0]) && path[1] == ':' && path[2] == '\\')
     {
         isAbsolute = true;
@@ -993,7 +821,7 @@ void CommandProcessor::handleCd(const string& path)
             traversalDir = traversalDir->parent;
         }
 
-        // Verify the drive matches
+        // Verify the drive matches the current drive
         string traversalDrive = toUpper(traversalDir->name.substr(0, 2));
         if (traversalDrive != drive)
         {
@@ -1001,10 +829,12 @@ void CommandProcessor::handleCd(const string& path)
             return;
         }
 
-        // Update the path to remove the drive portion
-        string updatedPath = path.substr(3); // Remove "C:\"
+        // Update the path to remove the drive portion (e.g., "C:\" → "Users\John")
+        string updatedPath = path.substr(3);
+
+        // Split the updated path into components (e.g., "Users", "John")
         vector<string> pathComponents;
-        stringstream ss(updatedPath);
+        stringstream ss(updatedPath); //to split the path by '\\'.
         string component;
         while (getline(ss, component, '\\'))
         {
@@ -1012,7 +842,7 @@ void CommandProcessor::handleCd(const string& path)
                 pathComponents.push_back(component);
         }
 
-        // Step 5: Traverse the absolute path
+        // **Step 5: Traverse the Absolute Path**
         for (const auto& dirName : pathComponents)
         {
             if (dirName == ".")
@@ -1035,7 +865,7 @@ void CommandProcessor::handleCd(const string& path)
             }
             else
             {
-                // Search for the directory
+                // Search for the directory in the current directory
                 int dirIndex = traversalDir->searchDirectory(dirName);
                 if (dirIndex == -1)
                 {
@@ -1043,8 +873,9 @@ void CommandProcessor::handleCd(const string& path)
                     return;
                 }
 
+                // Check if the entry is a directory
                 Directory_Entry* subDirEntry = &traversalDir->DirOrFiles[dirIndex];
-                if (subDirEntry->dir_attr != 0x10) // Check if it's a directory
+                if (subDirEntry->dir_attr != 0x10) // 0x10 indicates a directory
                 {
                     cout << "Error: '" << dirName << "' is not a directory.\n";
                     return;
@@ -1061,7 +892,8 @@ void CommandProcessor::handleCd(const string& path)
         return;
     }
 
-    // Step 6: Handle relative paths
+    // **Step 6: Handle Relative Paths**
+    // Split the relative path into components (e.g., "Documents\Projects")
     vector<string> pathComponents;
     stringstream ssNonAbsolute(path);
     string component;
@@ -1072,7 +904,7 @@ void CommandProcessor::handleCd(const string& path)
     }
 
     // Traverse the relative path
-    bool errorOccurred = false;
+    bool errorOccurred = false; // Flag to track errors during traversal
     for (const auto& dirName : pathComponents)
     {
         if (dirName == ".")
@@ -1096,7 +928,7 @@ void CommandProcessor::handleCd(const string& path)
         }
         else
         {
-            // Search for the directory
+            // Search for the directory in the current directory
             int dirIndex = traversalDir->searchDirectory(dirName);
             if (dirIndex == -1)
             {
@@ -1105,8 +937,9 @@ void CommandProcessor::handleCd(const string& path)
                 break;
             }
 
+            // Check if the entry is a directory
             Directory_Entry* subDirEntry = &traversalDir->DirOrFiles[dirIndex];
-            if (subDirEntry->dir_attr != 0x10) // Check if it's a directory
+            if (subDirEntry->dir_attr != 0x10) // 0x10 indicates a directory
             {
                 cout << "Error: '" << dirName << "' is not a directory.\n";
                 errorOccurred = true;
@@ -1118,16 +951,13 @@ void CommandProcessor::handleCd(const string& path)
         }
     }
 
-    // Step 7: Update current directory if no errors occurred
+    // **Step 7: Update Current Directory if No Errors Occurred**
     if (!errorOccurred)
     {
         *currentDirectoryPtr = traversalDir;
         cout << "Changed directory to: " << (*currentDirectoryPtr)->getFullPath() << "\n";
     }
 }
-
-
-
 
 // Handles the "pwd" command to display the current directory path
 void CommandProcessor::handlePwd()
@@ -1139,15 +969,12 @@ void CommandProcessor::handlePwd()
     cout << "Current Directory: " << currentDir->getFullPath() << "\n";
 }
 
-
-
-
 // Handles the "history" command to display the list of executed commands
 void CommandProcessor::handleHistory()
 {
     // Display a header for the command history
     cout << "Command History:\n";
-    cout << "----------------\n";
+    cout << "------------------------------------------------------------------\n";
 
     // Iterate through the command history and display each command with an index
     for (size_t i = 0; i < commandHistory.size(); ++i)
@@ -1160,15 +987,14 @@ void CommandProcessor::handleHistory()
     {
         cout << "No commands in history.\n";
     }
+    cout << "------------------------------------------------------------------\n";
+
 }
-
-
-
 
 // Handles the "quit" command to exit the shell
 void CommandProcessor::handleQuit(bool& isRunning)
 {
-    // Display a stylized message indicating the shell is quitting
+    // Display a message indicating the shell is quitting
     cout << "************************************************************************************************************************\n";
     cout << "                                                    Quitting the Shell                                                  \n";
     cout << "************************************************************************************************************************\n";
@@ -1176,8 +1002,6 @@ void CommandProcessor::handleQuit(bool& isRunning)
     // Set the isRunning flag to false to terminate the shell loop
     isRunning = false;
 }
-
-
 
 // Navigates to a file based on the provided path and returns a File_Entry pointer
 File_Entry* CommandProcessor::MoveToFile(string& path)
@@ -1252,7 +1076,6 @@ File_Entry* CommandProcessor::MoveToFile(string& path)
     return file;
 }
 
-
 // Navigates to a directory based on the provided path and returns a Directory pointer
 Directory* CommandProcessor::MoveToDir(const string& path)
 {
@@ -1263,7 +1086,7 @@ Directory* CommandProcessor::MoveToDir(const string& path)
     // **Step 2: Split the Path into Components**
     // Use a stringstream to split the path by the backslash ('\\') delimiter
     vector<string> dirs; // Stores the individual directory components
-    stringstream ss(normalizedPath);
+    stringstream ss(normalizedPath);//String stream (can read from and write to a string).
     string token;
     while (getline(ss, token, '\\'))
     {
@@ -1335,8 +1158,6 @@ Directory* CommandProcessor::MoveToDir(const string& path)
     return current;
 }
 
-
-
 // Handles the "dir" command to display the contents of a directory
 void CommandProcessor::handleDir(const string& path)
 {
@@ -1375,76 +1196,49 @@ void CommandProcessor::handleDir(const string& path)
     int dirCount = 0;         // Count of subdirectories
     long long totalSize = 0;  // Total size of files in bytes
 
-    vector<Directory_Entry> directories; // List to store directory entries
-    vector<Directory_Entry> files;       // List to store file entries
+    // Define column widths for alignment
+    const int nameWidth = 30; // Width for the "Name" column
+    const int sizeWidth = 15; // Width for the "Size" column
 
-    // Step 3: Separate directories and files
-    for (const auto& entry : targetDir->DirOrFiles) {
-        if (entry.dir_attr == 0x10) { // Check if entry is a directory
-            if (entry.getName() == "." || entry.getName() == "..") continue; // Skip "." and ".."
-            directories.push_back(entry);
-        }
-        else {
-            // Entry is a file
-            files.push_back(entry);
-        }
-    }
+    // Print column headers
+    cout << "Name                          Size\n";
+    cout << "----                          ----\n";
 
-    // Step 4: Define column widths for formatting
-    const int nameWidth = 40;
-    const int sizeWidth = 15;
+    // Add "." entry
+    cout << ". <DIR>" << string(nameWidth - 7, ' ') << "-" << "\n";
+    dirCount++;
 
-    // Step 5: Print column headers for name and size
-    cout << left << setw(nameWidth) << "Name"
-        << right << setw(sizeWidth) << "Size\n";
-    cout << left << setw(nameWidth) << "----"
-        << right << setw(sizeWidth) << "----\n";
-
-    // Step 6: Display directories first
-    for (const auto& d : directories) {
-        string name = d.getName();
-        if (name.empty()) {
-            name = "<No Directory Name>";
-        }
-        string attr = "<DIR>";
-
-        // Print directory entry
-        cout << left << setw(nameWidth) << (name + " " + attr)
-            << right << setw(sizeWidth) << "-" << "\n";
+    // Add ".." entry if the parent directory exists
+    if (targetDir->parent != nullptr) {
+        cout << ".. <DIR>" << string(nameWidth - 8, ' ') << "-" << "\n";
         dirCount++;
     }
 
-    // Step 7: Display files
-    for (const auto& f : files) {
-        string name = f.getName();
-        if (name.empty()) {
-            name = "<No Name>.txt"; // Default to ".txt" if name is empty
+    // Separate directories and files
+    for (const auto& entry : targetDir->DirOrFiles) {
+        string name = entry.getName();
+        if (entry.dir_attr == 0x10) { // Directory
+            if (name.empty()) name = "<No Directory Name>";
+            cout << name << " <DIR>" << string(nameWidth - name.size() - 6, ' ') << "-" << "\n";
+            dirCount++;
         }
-        int size = f.getSize(); // Get the size of the file
-
-        // Print file entry
-        cout << left << setw(nameWidth) << name
-            << right << setw(sizeWidth) << size << " bytes\n";
-        fileCount++;
-        totalSize += size;
+        else { // File
+            if (name.empty()) name = "<No Name>.txt";
+            string sizeStr = to_string(entry.getSize()) + " bytes";
+            cout << name << string(nameWidth - name.size(), ' ') << sizeStr << "\n";
+            fileCount++;
+            totalSize += entry.getSize();
+        }
     }
 
-    // Step 8: Calculate free space using Mini_FAT methods
-    long long totalClusters = Mini_FAT::getTotalClusters();
-    long long freeClusters = Mini_FAT::getFreeClusters();
-    long long clusterSize = Mini_FAT::getClusterSize();
-    long long freeSpace = freeClusters * clusterSize;
+    // Calculate free space
+    long long freeSpace = Mini_FAT::getFreeClusters() * Mini_FAT::getClusterSize();
 
-    // Step 9: Print summary
+    // Print summary
     cout << "\n"
-        << left << setw(nameWidth) << ""
-        << right << setw(sizeWidth) << fileCount << " File(s)     " << totalSize << " bytes\n"
-        << left << setw(nameWidth) << ""
-        << right << setw(sizeWidth) << dirCount << " Dir(s)      " << freeSpace << " bytes free\n";
+        << fileCount << " File(s)   " << string(sizeWidth - to_string(fileCount).size() - 7, ' ') << totalSize << " bytes\n"
+        << dirCount << " Dir(s)    " << string(sizeWidth - to_string(dirCount).size() - 7, ' ') << freeSpace << " bytes free\n";
 }
-
-
-
 
 // Handles the "echo" command to create a new empty file
 void CommandProcessor::handleEcho(const string& filePath)
@@ -1509,9 +1303,6 @@ void CommandProcessor::handleEcho(const string& filePath)
     cout << "File '" << newFileEntry.getName() << "' created successfully.\n";
 }
 
-
-
-
 // Handles the "write" command to write content to an existing file
 void CommandProcessor::handleWrite(const string& filePath)
 {
@@ -1563,7 +1354,7 @@ void CommandProcessor::handleWrite(const string& filePath)
             }
 
             // Step 6: Prompt user for input to write to the file
-            cout << "Enter text to write to '" << fileName << "'. Type 'END' on a new line to finish.\n";
+            cout << "Enter text to write to '" << fileName << "'. Type 'END in Capitl Only' on a new line to finish.\n";
 
             string line;
             string newContent;
@@ -1595,8 +1386,6 @@ void CommandProcessor::handleWrite(const string& filePath)
     }
 }
 
-
-
 // Validates a file name based on specific rules
 bool CommandProcessor::isValidFileName(const string& name)
 {
@@ -1607,7 +1396,7 @@ bool CommandProcessor::isValidFileName(const string& name)
     }
 
     // Step 1: Check for invalid characters
-    const string invalidChars = R"(/\*?"<>|)";
+    const string invalidChars = R"(/\*?"<>|)";//It ignores all the special characters like \n and \t and treats them like normal text.
     for (char c : name)
     {
         if (invalidChars.find(c) != string::npos)
@@ -1647,8 +1436,6 @@ bool CommandProcessor::isValidFileName(const string& name)
 
     return true;
 }
-
-
 
 // Handles the "type" command to display the content of one or more files
 void CommandProcessor::handleType(const vector<string>& filePaths)
@@ -1701,7 +1488,7 @@ void CommandProcessor::handleType(const vector<string>& filePaths)
 
                 // Step 5: Display the file content
                 cout << "Content of '" << fileName << "':\n";
-                cout << entry.getContent() << "\n"; // Assuming getContent() retrieves file content
+                cout << entry.getContent() << "\n"; // retrieves file content
                 fileFound = true;
                 break;
             }
@@ -1715,9 +1502,6 @@ void CommandProcessor::handleType(const vector<string>& filePaths)
     }
 }
 
-
-
-
 // Handles the "del" command to delete files or directories
 void CommandProcessor::handleDel(const vector<string>& targets)
 {
@@ -1728,20 +1512,16 @@ void CommandProcessor::handleDel(const vector<string>& targets)
         string entryName;
         string dirPath;
 
-        // Step 1: Determine if the target is a full path or relative
-        bool isFullPath = (target.find(":\\") != string::npos || target[0] == '\\');
+        // Step 1: Parse the target path using Parser::parsePath
+        pair<string, string> parsedPath = Parser::parsePath(target);
+        dirPath = parsedPath.first;
+        entryName = parsedPath.second;
+
+        // Step 2: Determine if the target is a relative path or root path
+        bool isFullPath = !dirPath.empty(); // If dirPath is empty, it's a relative path
         if (isFullPath)
         {
-            // Extract the directory path and entry name
-            size_t lastSlash = target.find_last_of("\\");
-            if (lastSlash == string::npos || lastSlash == target.length() - 1)
-            {
-                cout << "Error: Invalid path '" << target << "'.\n";
-                continue;
-            }
-
-            dirPath = target.substr(0, lastSlash);
-            entryName = target.substr(lastSlash + 1);
+            // Move to the parent directory
             parentDir = MoveToDir(dirPath);
 
             // Check if the parent directory exists
@@ -1755,7 +1535,6 @@ void CommandProcessor::handleDel(const vector<string>& targets)
         {
             // Use the current directory for relative paths
             parentDir = *currentDirectoryPtr;
-            entryName = target;
         }
 
         // Step 2: Search for the entry in the parent directory
@@ -1771,13 +1550,11 @@ void CommandProcessor::handleDel(const vector<string>& targets)
         // Step 3: Handle directories
         if (dirEntry->dir_attr == 0x10) // Directory
         {
-            cout << "Are you sure you want to delete all files in the directory '"
-                << dirEntry->getName() << "'? (y/n): ";
-            char confirmation;
-            cin >> confirmation;
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            cout << "Are you sure you want to delete all files in the directory '" << dirEntry->getName() << "'? (y/n): ";
+            string confirmation;
+            getline(cin, confirmation);
 
-            if (tolower(confirmation) == 'y')
+            if (tolower(confirmation[0]) == 'y')
             {
                 string fullPath = parentDir->getFullPath() + "\\" + dirEntry->getName();
                 Directory* targetDir = MoveToDir(fullPath);
@@ -1795,10 +1572,9 @@ void CommandProcessor::handleDel(const vector<string>& targets)
                     {
                         string fileName = it->getName();
                         cout << "Are you sure you want to delete the file '" << fileName << "'? (y/n): ";
-                        cin >> confirmation;
-                        cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                        getline(cin, confirmation);
 
-                        if (tolower(confirmation) == 'y')
+                        if (tolower(confirmation[0]) == 'y')
                         {
                             File_Entry file(*it, targetDir);
                             file.deleteFile();
@@ -1828,11 +1604,10 @@ void CommandProcessor::handleDel(const vector<string>& targets)
         {
             string fileName = dirEntry->getName();
             cout << "Are you sure you want to delete the file '" << fileName << "'? (y/n): ";
-            char confirmation;
-            cin >> confirmation;
-            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            string confirmation;
+            getline(cin, confirmation);
 
-            if (tolower(confirmation) == 'y')
+            if (tolower(confirmation[0]) == 'y')
             {
                 File_Entry file(*dirEntry, parentDir);
                 file.deleteFile();
@@ -1850,19 +1625,10 @@ void CommandProcessor::handleDel(const vector<string>& targets)
     }
 }
 
-
-
-
 // Handles the "rename" command to rename a file in the virtual file system
 void CommandProcessor::handleRename(const vector<string>& args)
 {
     // Step 1: Validate the input arguments
-    if (args.size() != 2)
-    {
-        cout << "Error: Invalid syntax for rename command.\n";
-        cout << "Usage: rename [fileName or fullPath] [new fileName]\n";
-        return;
-    }
 
     string filePath = args[0];
     string newFileName = args[1];
@@ -1937,22 +1703,18 @@ void CommandProcessor::handleRename(const vector<string>& args)
  //Handles the 'copy' command to copy files or directories within the virtual file system.
 void CommandProcessor::handleCopy(const vector<string>& args)
 {
-    // **Case (1): Handle empty arguments (just "copy" command)**
-    if (args.empty())
-    {
-        cout << "Error: Invalid syntax for copy command.\n";
-        cout << "Usage: copy [source] [destination]\n";
-        return;
-    }
-
     // Extract source and destination paths from arguments
     string sourcePath = args[0];
-    string destinationPath = args.size() > 1 ? args[1] : "";
+    string destinationPath;
+
+    if (args.size() > 1) {
+        destinationPath = args[1];
+    }
 
     // **Parse the Source Path**
     Directory* sourceDir = nullptr; // Pointer to the source directory
     string sourceName; // Name of the source file or directory
-    size_t lastSlash = sourcePath.find_last_of("/\\"); // Find the last slash in the source path
+    size_t lastSlash = sourcePath.find_last_of("\\"); // Find the last slash in the source path
 
     if (lastSlash == string::npos)
     {
@@ -2304,6 +2066,7 @@ void CommandProcessor::handleCopy(const vector<string>& args)
     cout << "Error: Unsupported entry type for '" << sourceName << "'.\n";
 }
 
+//Handles the 'import' command to import files or directories from physical disk to virsual disk.
 void CommandProcessor::handleImport(const vector<string>& args) {
     // **Validate the number of arguments**
     // Ensure the number of arguments is either 1 (source only) or 2 (source and destination)
@@ -2316,26 +2079,30 @@ void CommandProcessor::handleImport(const vector<string>& args) {
     // Extract the source path from the arguments
     string source = args[0];
     // If a destination is provided, use it; otherwise, leave it empty
-    string destination = (args.size() == 2) ? args[1] : "";
+    string destination;
+    if (args.size() == 2)
+        destination = args[1];
+    else
+        destination = "";
 
     // Convert the source path to a filesystem path object for easier manipulation
-    fs::path sourcePath(source);
+    filesystem::path sourcePath(source);
 
     // **Resolve the source path if it is relative**
     // If the source path is not absolute, resolve it relative to the current working directory
     if (!sourcePath.is_absolute()) {
-        fs::path currentDirPath = fs::current_path(); // Physical disk's current working directory
+        filesystem::path currentDirPath = filesystem::current_path(); // Physical disk's current working directory
         sourcePath = currentDirPath / sourcePath; // Append the relative path to the current directory
 
         // If the resolved path does not exist, check in the Debug folder
-        if (!fs::exists(sourcePath)) {
-            fs::path debugFolder = "C:\\Users\\omara\\Desktop\\SHELL\\SHELL\\shell\\x64\\Debug";
-            sourcePath = debugFolder / source; // Append the source to the Debug folder path
+        if (!filesystem::exists(sourcePath)) {
+            filesystem::path debugFolder = "C:\\Users\\omara\\Desktop\\SHELL\\SHELL\\shell\\x64\\Debug";
+            sourcePath = debugFolder / source; // Concatenates two paths the source to the Debug folder path
         }
     }
 
     // **Check if the source path exists**
-    if (!fs::exists(sourcePath)) {
+    if (!filesystem::exists(sourcePath)) {
         cout << "Error: Source path '" << source << "' does not exist.\n";
         return;
     }
@@ -2345,7 +2112,7 @@ void CommandProcessor::handleImport(const vector<string>& args) {
     vector<string> importedFiles; // Stores the names of successfully imported files
 
     // **Handle importing a single file**
-    if (fs::is_regular_file(sourcePath)) {
+    if (filesystem::is_regular_file(sourcePath)) {
         string fileName = sourcePath.filename().string(); // Extract the file name from the path
 
         Directory* targetDir = *currentDirectoryPtr; // Get the current directory in the virtual disk
@@ -2364,7 +2131,7 @@ void CommandProcessor::handleImport(const vector<string>& args) {
             cout << "File '" << fileName << "' already exists. Do you want to overwrite it? (yes/no): ";
             string userChoice;
             getline(cin, userChoice);
-            transform(userChoice.begin(), userChoice.end(), userChoice.begin(), ::tolower);
+            userChoice = toLower(userChoice);
             if (userChoice != "yes") {
                 cout << "Skipped importing '" << fileName << "'.\n";
                 return; // Skip import if the user chooses not to overwrite
@@ -2405,9 +2172,9 @@ void CommandProcessor::handleImport(const vector<string>& args) {
         cout << "File '" << fileName << "' imported successfully.\n";
     }
     // **Handle importing a directory**
-    else if (fs::is_directory(sourcePath)) {
+    else if (filesystem::is_directory(sourcePath)) {
         // Iterate over all entries in the source directory
-        for (const auto& entry : fs::directory_iterator(sourcePath)) {
+        for (const auto& entry : filesystem::directory_iterator(sourcePath)) {
             // Only process regular files with a .txt extension
             if (entry.is_regular_file() && entry.path().extension() == ".txt") {
                 string fileName = entry.path().filename().string(); // Extract the file name
@@ -2426,7 +2193,8 @@ void CommandProcessor::handleImport(const vector<string>& args) {
                     cout << "File '" << fileName << "' already exists. Do you want to overwrite it? (yes/no): ";
                     string userChoice;
                     getline(cin, userChoice);
-                    transform(userChoice.begin(), userChoice.end(), userChoice.begin(), ::tolower);
+                    userChoice = toLower(userChoice);
+
                     if (userChoice != "yes") {
                         cout << "Skipped importing '" << fileName << "'.\n";
                         continue; // Skip this file if the user chooses not to overwrite
@@ -2479,6 +2247,7 @@ void CommandProcessor::handleImport(const vector<string>& args) {
     }
 }
 
+//Handles the 'export' command to export files or directories within the virtual file system to physical disk.
 void CommandProcessor::handleExport(const vector<string>& args)
 {
     // **Check for valid number of arguments**
@@ -2518,8 +2287,8 @@ void CommandProcessor::handleExport(const vector<string>& args)
     if (isSourceAbsolutePath)
     {
         // Split the absolute path into directory path and entry name
-        string dirPath = sourcePath.substr(0, sourcePath.find_last_of("\\/"));
-        string entryName = sourcePath.substr(sourcePath.find_last_of("\\/") + 1);
+        string dirPath = sourcePath.substr(0, sourcePath.find_last_of("\\"));
+        string entryName = sourcePath.substr(sourcePath.find_last_of("\\") + 1);
 
         // Move to the directory specified in the absolute path
         Directory* resolvedDir = MoveToDir(dirPath);
@@ -2574,16 +2343,16 @@ void CommandProcessor::handleExport(const vector<string>& args)
                 file.readFileContent(); // Read the content of the file
 
                 // Construct the destination file path
-                string destinationFilePath = (fs::path(destinationPath) / entry.getName()).string();
+                string destinationFilePath = (filesystem::path(destinationPath) / entry.getName()).string();
 
                 // **Check for overwrite**
                 // If the destination file already exists, prompt the user for confirmation
-                if (fs::exists(destinationFilePath))
+                if (filesystem::exists(destinationFilePath))
                 {
                     cout << "File '" << destinationFilePath << "' already exists. Overwrite? (yes/no): ";
                     string choice;
                     getline(cin, choice);
-                    transform(choice.begin(), choice.end(), choice.begin(), ::tolower);
+                    choice = toLower(choice);
                     if (choice != "yes")
                     {
                         cout << "Skipping '" << entry.getName() << "'.\n";
@@ -2600,7 +2369,7 @@ void CommandProcessor::handleExport(const vector<string>& args)
                 }
 
                 // Write the file content to the destination file
-                outFile.write(file.content.c_str(), file.content.size());
+                outFile.write(file.content.c_str(), file.content.size());// Converts the content (stored as a std::string) into a C-style string pointer.
                 outFile.close();
 
                 exportedFiles++; // Increment the exported files counter
@@ -2621,20 +2390,20 @@ void CommandProcessor::handleExport(const vector<string>& args)
 
         // Determine the destination file path
         string destinationFilePath = destinationPath;
-        if (fs::is_directory(destinationPath))
+        if (filesystem::is_directory(destinationPath))
         {
             // If the destination is a directory, append the source file name to it
-            destinationFilePath = (fs::path(destinationPath) / sourceEntry->getName()).string();
+            destinationFilePath = (filesystem::path(destinationPath) / sourceEntry->getName()).string();
         }
 
         // **Check for overwrite**
         // If the destination file already exists, prompt the user for confirmation
-        if (fs::exists(destinationFilePath))
+        if (filesystem::exists(destinationFilePath))
         {
             cout << "File '" << destinationFilePath << "' already exists. Overwrite? (yes/no): ";
             string choice;
             getline(cin, choice);
-            transform(choice.begin(), choice.end(), choice.begin(), ::tolower);
+            string choice = toLower(choice);
             if (choice != "yes")
             {
                 cout << "Export canceled for '" << sourceEntry->getName() << "'.\n";
