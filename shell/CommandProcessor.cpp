@@ -2403,7 +2403,6 @@ void CommandProcessor::handleExport(const vector<string>& args)
             cout << "File '" << destinationFilePath << "' already exists. Overwrite? (yes/no): ";
             string choice;
             getline(cin, choice);
-            string choice = toLower(choice);
             if (choice != "yes")
             {
                 cout << "Export canceled for '" << sourceEntry->getName() << "'.\n";
